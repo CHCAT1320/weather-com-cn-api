@@ -8,6 +8,7 @@ export interface TrackPoint {
   time: string; lng: number; lat: number;
   pressure: number; windSpeed: number;
   intensity: string; direction: string; moveSpeed: string;
+  windCircles: { lv7: number; lv10: number; lv12: number } | null;
 }
 
 export interface WindCircles {
@@ -32,6 +33,7 @@ export interface WindDataHeader {
   refTime: string; parameterCategory: number; parameterNumber: number;
   forecastTime: number; gridDefinitionTemplateName: string;
   numberPoints: number; winds: string; nx: number; ny: number;
+  lo1: number; la1: number; dx: number; dy: number;
 }
 
 export interface WindDataComponent { header: WindDataHeader; data: number[]; }

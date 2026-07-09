@@ -87,27 +87,48 @@ export async function getRadarList(): Promise<RadarTime> {
 
 /** 构建雷达图像完整 URL */
 export function getRadarImageUrl(filename: string): string {
+  return D1 + "/radar_channel/radar/pic/" + filename;
+}
 
 /** 下载雷达图像 PNG 文件 */
 export async function fetchRadarImage(filename: string): Promise<Buffer> {
+  const resp = await fetch(getRadarImageUrl(filename), { headers: TY_H });
+  return Buffer.from(await resp.arrayBuffer());
+}
 
 /** 获取所有雷达站点的图像边界信息 */
 export async function getImageBounds(): Promise<Record<string, { bound: [[number, number], [number, number]]; name: string; prov: string }>> {
+  const resp = await fetch(D1 + "/radar_channel/radar/json/bounds.json", { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /** 获取中国区域的地理边界（73°E~135°E, 12.2°N~54.2°N） */
 export function getChinaBounds(): { west: number; south: number; east: number; north: number } {
+  return { west: 73, south: 12.2, east: 135, north: 54.2 };
+}
 
 /** 获取卫星云图列表 */
 export async function getCloudList(): Promise<CloudTime> {
+  const resp = await fetch(D1 + "/radar_channel/cloud/json/cloud_list.json", { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /** 构建云图完整 URL */
 export function getCloudImageUrl(filename: string): string {
+  return D1 + "/radar_channel/cloud/pic/" + filename;
+}
 
 /** 下载卫星云图 PNG 文件 */
 export async function fetchCloudImage(filename: string): Promise<Buffer> {
+  const resp = await fetch(getCloudImageUrl(filename), { headers: TY_H });
+  return Buffer.from(await resp.arrayBuffer());
+}
 
 /** 获取全球风场时间列表（GFS 模型） */
 export async function getWindList(): Promise<WindTimeItem[]> {
+  const resp = await fetch(D1 + "/radar_channel/wind/json/wind_list.json", { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /**
  * 获取全球风场数据（U/V 分量）
@@ -115,18 +136,31 @@ export async function getWindList(): Promise<WindTimeItem[]> {
  * @returns 两个 WindDataComponent（U 和 V 分量），各含 360×181 网格数据
  */
 export async function getWindData(filename: string): Promise<WindDataComponent[]> {
+  const resp = await fetch(getWindDataUrl(filename), { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /** 构建风场数据完整 URL */
 export function getWindDataUrl(filename: string): string {
+  return D1 + "/radar_channel/wind/data/" + filename;
+}
 
 /** 获取降水圈数据 */
 export async function getRainCircle(): Promise<{ rainCircle: any[] }> {
+  const resp = await fetch(D1 + "/radar_channel/rain/json/rain_circle.json", { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /** 获取旧版全国雷达拼图列表 */
 export async function getRadarMosaicList(): Promise<any> {
+  const resp = await fetch(D1 + "/radar_channel/radar/json/mosaic_list.json", { headers: TY_H });
+  return parseJsonp(await resp.text());
+}
 
 /** 构建旧版雷达拼图完整 URL */
 export function getRadarMosaicUrl(path: string): string {
+  return D1 + "/radar_channel/radar/pic/" + path;
+}
 
 /** 下载旧版全国雷达拼图 PNG 文件 */
 export async function fetchRadarMosaic(path: string): Promise<Buffer> {
