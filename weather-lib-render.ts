@@ -170,6 +170,8 @@ export async function renderCloudOverlay(
 const CHINA_BOUNDS = { west: 73, south: 12.2, east: 135, north: 54.2 };
 
 /** 一键渲染全国雷达图（底图+最新雷达叠加） */
+export async function renderChinaRadar(options: RenderOptions = {}): Promise<RenderResult> {
+  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 800, options.height ?? 600);
   const opts = { zoom, centerLng, centerLat, width: 800, height: 600, ...options };
   console.log("Rendering radar map...");
   const base = await renderBaseMap(opts);
