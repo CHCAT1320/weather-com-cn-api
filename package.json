@@ -1,0 +1,15 @@
+﻿{
+  "name": "weather-com-cn-api",
+  "version": "3.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "bun run test-weather-lib.ts",
+    "test:api": "bun run test-apis-v3.ts"
+  },
+  "dependencies": {
+    "sharp": "^0.34.5"
+  },
+  "devDependencies": {
+    "@types/bun": "latest"
+  }
+}
