@@ -42,6 +42,10 @@ export interface RenderOptions {
   width?: number; height?: number; format?: "png" | "jpeg";
   zoom?: number; centerLng?: number; centerLat?: number;
   mapStyle?: number;
+  tileUrl?: string;
+  windSeed?: number;
+  windStep?: number;
+  windArrow?: number;
 }
 
 export interface RenderResult {

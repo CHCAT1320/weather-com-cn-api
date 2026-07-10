@@ -435,9 +435,9 @@ callback([{"header":{...},"data":[...]},{"header":{...},"data":[...]}])
 - 数据单位：m/s
 - 取值范围：约 -30 到 +30 m/s
 - **U 分量**（parameterNumber=2）：正值=西风→东，负值=东风→西
-- **V 分量**（parameterNumber=3）：正值=南风→北，负值=北风→南
+- **V 分量**（parameterNumber=3）：正值=北风→南（已转为屏幕坐标系，Y轴向下），负值=南风→北
 - 风速 = `√(U² + V²)`
-- 气象风向 = `atan2(-U, -V)`（风**来自**的方向）
+- 气象风向 = `atan2(-U, V)`（风**来自**的方向，V已翻转）
 
 ---
 
@@ -565,9 +565,22 @@ py = (1 − ln(tan(φ) + 1/cos(φ)) / π) / 2 × n
 
 **缩放级别参考：**
 
-| 级别 | 中国范围像素 | 每像素 ≈ |
+| 级别 | 世界范围像素 | 每像素 ≈ |
 |------|-------------|----------|
-| z=3 | ~350×300 | 28 km |
-| z=4 | ~700×600 | 14 km |
-| z=5 | ~1400×1200 | 7 km |
-| z=6 | ~2800×2400 | 3.5 km |
+| z=2 | 1024×512 | 78 km |
+| z=3 | 2048×1024 | 39 km |
+| z=4 | 4096×2048 | 19 km |
+| z=5 | 8192×4096 | 10 km |
+| z=6 | 16384×8192 | 5 km |
+
+**自定义瓦片源：**
+
+通过 `tileUrl` 参数可替换默认的高德地图瓦片，格式使用 `{z}`、`{x}`、`{y}` 占位符：
+
+```typescript
+// OpenStreetMap
+renderBaseMap({ tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png" })
+
+// CartoDB 暗色主题
+renderBaseMap({ tileUrl: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png" })
+```

@@ -41,10 +41,15 @@ function calcZoomFromBounds(
   return { zoom, centerLng, centerLat };
 }
 
-async function fetchTile(x: number, y: number, z: number, style: number): Promise<Buffer> {
-  const sub = SUBDOMAINS[Math.abs(x + y) % 4];
-  const url = AMAP_TILE.replace("{0}", sub).replace("{1}", String(style)).replace("{2}", String(x)).replace("{3}", String(y)).replace("{4}", String(z));
-  const resp = await fetch(url, { headers: { "User-Agent": "WeatherMapLib/1.0" } });
+async function fetchTile(x: number, y: number, z: number, style: number, tileUrl?: string): Promise<Buffer> {
+  let url: string;
+  if (tileUrl) {
+    url = tileUrl.replace("{z}", String(z)).replace("{x}", String(x)).replace("{y}", String(y));
+  } else {
+    const sub = SUBDOMAINS[Math.abs(x + y) % 4];
+    url = AMAP_TILE.replace("{0}", sub).replace("{1}", String(style)).replace("{2}", String(x)).replace("{3}", String(y)).replace("{4}", String(z));
+  }
+  const resp = await fetch(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36" } });
   return Buffer.from(await resp.arrayBuffer());
 }
 
@@ -54,7 +59,7 @@ async function fetchTile(x: number, y: number, z: number, style: number): Promis
  * @returns 包含 PNG buffer 和 dataUrl 的渲染结果
  */
 export async function renderBaseMap(options: RenderOptions = {}): Promise<RenderResult> {
-  const { width = 800, height = 600, zoom = 5, centerLng = 104, centerLat = 35, mapStyle = 8 } = options;
+  const { width = 1600, height = 1200, zoom = 5, centerLng = 104, centerLat = 35, mapStyle = 8, tileUrl } = options;
   const center = lngLatToPixel(centerLng, centerLat, zoom);
   const halfW = width / 2, halfH = height / 2;
   const maxTile = Math.pow(2, zoom);
@@ -70,7 +75,7 @@ export async function renderBaseMap(options: RenderOptions = {}): Promise<Render
     for (let ty = startTY; ty < endTY; ty++) {
       if (tx < 0 || tx >= maxTile || ty < 0 || ty >= maxTile) continue;
       promises.push((async () => {
-        tiles.push({ x: tx, y: ty, buf: await fetchTile(tx, ty, zoom, mapStyle) });
+        tiles.push({ x: tx, y: ty, buf: await fetchTile(tx, ty, zoom, mapStyle, tileUrl) });
       })());
     }
   }
@@ -96,7 +101,7 @@ function calcOverlay(
   bounds: { west: number; south: number; east: number; north: number },
   options: RenderOptions
 ) {
-  const { width = 800, height = 600, zoom = 5, centerLng = 104, centerLat = 35 } = options;
+  const { width = 1600, height = 1200, zoom = 5, centerLng = 104, centerLat = 35 } = options;
   const center = lngLatToPixel(centerLng, centerLat, zoom);
   const halfW = width / 2, halfH = height / 2;
 
@@ -171,8 +176,8 @@ const CHINA_BOUNDS = { west: 73, south: 12.2, east: 135, north: 54.2 };
 
 /** 一键渲染全国雷达图（底图+最新雷达叠加） */
 export async function renderChinaRadar(options: RenderOptions = {}): Promise<RenderResult> {
-  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 800, options.height ?? 600);
-  const opts = { zoom, centerLng, centerLat, width: 800, height: 600, ...options };
+  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 1600, options.height ?? 1200);
+  const opts = { zoom, centerLng, centerLat, width: 1600, height: 1200, ...options };
   console.log("Rendering radar map...");
   const base = await renderBaseMap(opts);
   const radarList = await getRadarList();
@@ -181,8 +186,8 @@ export async function renderChinaRadar(options: RenderOptions = {}): Promise<Ren
 }
 
 export async function renderChinaCloud(options: RenderOptions = {}): Promise<RenderResult> {
-  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 800, options.height ?? 600);
-  const opts = { zoom, centerLng, centerLat, width: 800, height: 600, ...options };
+  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 1600, options.height ?? 1200);
+  const opts = { zoom, centerLng, centerLat, width: 1600, height: 1200, ...options };
   console.log("Rendering cloud map...");
   const base = await renderBaseMap(opts);
   const cloudList = await getCloudList();
@@ -199,18 +204,23 @@ function pixelToLngLat(worldX: number, worldY: number, zoom: number): { lng: num
   return { lng, lat };
 }
 
+function floorMod(a: number, n: number): number {
+  return a - n * Math.floor(a / n);
+}
+
 function interpolateWind(
   lon: number, lat: number,
   uData: number[], vData: number[],
   hdr: { nx: number; ny: number; lo1: number; la1: number; dx: number; dy: number }
 ): { u: number; v: number } {
   const { nx, ny, lo1, la1, dx, dy } = hdr;
-  const gx = (lon - lo1) / dx;
+  const gx = floorMod(lon - lo1, 360) / dx;
   const gy = (la1 - lat) / dy;
   const i0 = Math.floor(gx);
   const j0 = Math.floor(gy);
-  if (i0 < 0 || i0 >= nx - 1 || j0 < 0 || j0 >= ny - 1) return { u: 0, v: 0 };
-  const i1 = i0 + 1, j1 = j0 + 1;
+  if (j0 < 0 || j0 >= ny - 1) return { u: 0, v: 0 };
+  const i1 = (i0 + 1) % nx;
+  const j1 = j0 + 1;
   const fx = gx - i0, fy = gy - j0;
   const idx = (j: number, i: number) => j * nx + i;
   const bilerp = (d: number[]) => {
@@ -246,8 +256,8 @@ function traceStreamline(
     pts.push({ x: cx, y: cy, speed });
 
     const dir = forward ? 1 : -1;
-    cx += dir * (wind.u / speed) * stepSize;
-    cy -= dir * (wind.v / speed) * stepSize;
+cx += dir * (wind.u / speed) * stepSize;
+      cy += dir * (wind.v / speed) * stepSize;
   }
 
   return pts;
@@ -265,9 +275,10 @@ function windColor(speed: number, alpha: number): string {
 
 function buildWindSVG(
   windData: WindDataComponent[],
-  opts: { width: number; height: number; zoom: number; centerLng: number; centerLat: number }
+  opts: { width: number; height: number; zoom: number; centerLng: number; centerLat: number; windSeed?: number; windStep?: number; windArrow?: number }
 ): string {
   const { width, height, zoom, centerLng, centerLat } = opts;
+  const scale = width / 800;
   const center = lngLatToPixel(centerLng, centerLat, zoom);
   const halfW = width / 2, halfH = height / 2;
   const offsetX = center.px - halfW;
@@ -281,7 +292,7 @@ function buildWindSVG(
   const uData = uComp.data;
   const vData = vComp.data;
 
-  const SEED = 28, STEP = 3, MAX = 100, ARROW = 50;
+  const SEED = Math.round((opts.windSeed ?? 18) * scale), STEP = Math.round((opts.windStep ?? 2) * scale), MAX = 100, ARROW = Math.round((opts.windArrow ?? 50) * scale);
 
   let svg = `<svg width="${width}" height="${height}" xmlns="http://www.w3.org/2000/svg">`;
 
@@ -295,13 +306,13 @@ function buildWindSVG(
       const maxSpeed = all.reduce((s, p) => Math.max(s, p.speed), 0);
       const color = windColor(maxSpeed, 0.75);
       const ptsStr = all.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-      svg += `<polyline points="${ptsStr}" stroke="${color}" stroke-width="1.3" fill="none" opacity="0.8" />`;
+      svg += `<polyline points="${ptsStr}" stroke="${color}" stroke-width="${1.3 * scale}" fill="none" opacity="0.8" />`;
 
       for (let a = Math.floor(ARROW / 2); a < all.length - 1; a += ARROW) {
         const p0 = all[a];
         const p1 = all[Math.min(a + 1, all.length - 1)];
         const angle = Math.atan2(p1.y - p0.y, p1.x - p0.x);
-        const hl = 5;
+        const hl = 5 * scale;
         const ax1 = p1.x - hl * Math.cos(angle - 0.5);
         const ay1 = p1.y - hl * Math.sin(angle - 0.5);
         const ax2 = p1.x - hl * Math.cos(angle + 0.5);
@@ -311,7 +322,7 @@ function buildWindSVG(
     }
   }
 
-  const lx = 10, ly = 10, lw = 130, lh = 22;
+  const lx = 10 * scale, ly = 10 * scale, lw = 140 * scale, lh = 22 * scale;
   const items = [
     { label: "0-5 m/s", color: windColor(2.5, 0.8) },
     { label: "5-10", color: windColor(7.5, 0.8) },
@@ -321,17 +332,26 @@ function buildWindSVG(
     { label: "25+", color: windColor(28, 0.8) },
   ];
   svg += `<g transform="translate(${lx},${ly})">`;
-  svg += `<rect x="0" y="0" width="${lw}" height="${items.length * lh + 10}" fill="rgba(0,0,0,0.65)" rx="4" />`;
-  svg += `<text x="${lw / 2}" y="16" fill="#fff" font-size="11" font-weight="bold" text-anchor="middle">风速 m/s</text>`;
+  svg += `<rect x="0" y="0" width="${lw}" height="${items.length * lh + 18 * scale}" fill="rgba(0,0,0,0.65)" rx="${4 * scale}" />`;
+  svg += `<text x="${lw / 2}" y="${14 * scale}" fill="#fff" font-size="${11 * scale}" font-weight="bold" text-anchor="middle">风速 m/s</text>`;
   for (let i = 0; i < items.length; i++) {
-    const iy = 24 + i * lh;
-    svg += `<rect x="8" y="${iy}" width="18" height="14" fill="${items[i].color}" />`;
-    svg += `<text x="32" y="${iy + 12}" fill="#fff" font-size="10">${items[i].label}</text>`;
+    const iy = 22 * scale + i * lh;
+    svg += `<rect x="${8 * scale}" y="${iy}" width="${18 * scale}" height="${14 * scale}" fill="${items[i].color}" />`;
+    svg += `<text x="${32 * scale}" y="${iy + 12 * scale}" fill="#fff" font-size="${10 * scale}">${items[i].label}</text>`;
   }
   svg += `</g>`;
 
   svg += `</svg>`;
   return svg;
+}
+
+function typhoonCategory(speed: number): { abbr: string; name: string; color: string; dotR: number } {
+  if (speed >= 51) return { abbr: "SuperTY", name: "超强台风", color: "#C0392B", dotR: 5 };
+  if (speed >= 41.5) return { abbr: "STY", name: "强台风", color: "#E74C3C", dotR: 4.5 };
+  if (speed >= 32.7) return { abbr: "TY", name: "台风", color: "#FF8C00", dotR: 4 };
+  if (speed >= 24.5) return { abbr: "STS", name: "强热带风暴", color: "#F4D03F", dotR: 3.5 };
+  if (speed >= 17.2) return { abbr: "TS", name: "热带风暴", color: "#5DADE2", dotR: 3 };
+  return { abbr: "TD", name: "热带低压", color: "#6EC9E0", dotR: 2.5 };
 }
 
 function buildTyphoonSVG(
@@ -341,6 +361,7 @@ function buildTyphoonSVG(
   opts: { width: number; height: number; zoom: number; centerLng: number; centerLat: number }
 ): string {
   const { width, height, zoom, centerLng, centerLat } = opts;
+  const scale = width / 800;
   const center = lngLatToPixel(centerLng, centerLat, zoom);
   const halfW = width / 2, halfH = height / 2;
 
@@ -360,11 +381,12 @@ function buildTyphoonSVG(
 
   const latest = track[track.length - 1];
   const lp = toCanvas(latest.lng, latest.lat);
+  const cat = typhoonCategory(latest.windSpeed);
 
   const kmPerPx = (360 / (256 * Math.pow(2, zoom))) * 111.32 * Math.cos(latest.lat * Math.PI / 180);
+  const circles = latest.windCircles;
 
   if (lp.x >= -50 && lp.x <= width + 50 && lp.y >= -50 && lp.y <= height + 50) {
-    const circles = latest.windCircles;
     if (circles) {
       const levels = [
         { r: circles.lv7, label: "7级", stroke: "rgba(255,200,0,0.7)", fill: "rgba(255,200,0,0.1)" },
@@ -375,8 +397,7 @@ function buildTyphoonSVG(
         const lv = levels[i];
         if (lv.r > 0) {
           const r = lv.r / kmPerPx;
-          svg += `<ellipse cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" rx="${r.toFixed(1)}" ry="${r.toFixed(1)}" stroke="${lv.stroke}" fill="${lv.fill}" stroke-width="2" />`;
-          svg += `<text x="${(lp.x + r * 0.7).toFixed(1)}" y="${(lp.y - 6).toFixed(1)}" fill="${lv.stroke}" font-size="10" stroke="#000" stroke-width="2.5" paint-order="stroke">${lv.label} ${lv.r}km</text>`;
+          svg += `<ellipse cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" rx="${r.toFixed(1)}" ry="${r.toFixed(1)}" stroke="${lv.stroke}" fill="${lv.fill}" stroke-width="${2 * scale}" />`;
         }
       }
     }
@@ -384,22 +405,23 @@ function buildTyphoonSVG(
 
   const dots = visible.map((p, i) => {
     const isLast = i === visible.length - 1;
-    const fill = isLast ? "#ff0000" : "#ffcc00";
-    const r = isLast ? 5 : 3;
-    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="#fff" stroke-width="1" />`;
+    const pc = typhoonCategory(p.windSpeed);
+    const fill = isLast ? cat.color : pc.color;
+    const r = isLast ? cat.dotR : Math.max(2, pc.dotR * 0.6);
+    return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${r}" fill="${fill}" stroke="#fff" stroke-width="${1 * scale}" />`;
   }).join("");
   svg += dots;
 
   const polyline = visible.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-  svg += `<polyline points="${polyline}" stroke="#ff6600" stroke-width="2.5" fill="none" opacity="0.9" />`;
+  svg += `<polyline points="${polyline}" stroke="#ff6600" stroke-width="${2.5 * scale}" fill="none" opacity="0.9" />`;
 
   if (fvisible.length >= 1) {
     const fAll = [toCanvas(latest.lng, latest.lat), ...fvisible];
     const fptsStr = fAll.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
-    svg += `<polyline points="${fptsStr}" stroke="#ffcc00" stroke-width="2.5" stroke-dasharray="8,5" fill="none" opacity="0.9" />`;
+    svg += `<polyline points="${fptsStr}" stroke="#ffcc00" stroke-width="${2.5 * scale}" stroke-dasharray="${8 * scale},${5 * scale}" fill="none" opacity="0.9" />`;
     for (const fp of fvisible) {
-      svg += `<circle cx="${fp.x.toFixed(1)}" cy="${fp.y.toFixed(1)}" r="4" fill="none" stroke="#ffcc00" stroke-width="2.5" />`;
-      svg += `<text x="${(fp.x + 8).toFixed(1)}" y="${(fp.y - 6).toFixed(1)}" fill="#ffcc00" font-size="10" font-weight="bold" stroke="#000" stroke-width="2.5" paint-order="stroke">${fp.intensity || ""}</text>`;
+      svg += `<circle cx="${fp.x.toFixed(1)}" cy="${fp.y.toFixed(1)}" r="${4 * scale}" fill="none" stroke="#ffcc00" stroke-width="${2.5 * scale}" />`;
+      svg += `<text x="${(fp.x + 8 * scale).toFixed(1)}" y="${(fp.y - 6).toFixed(1)}" fill="#ffcc00" font-size="${10 * scale}" font-weight="bold" stroke="#000" stroke-width="${2.5 * scale}" paint-order="stroke">${fp.intensity || ""}</text>`;
     }
   }
 
@@ -409,52 +431,82 @@ function buildTyphoonSVG(
     const t = (p.time || "").replace("2026-", "").replace(" ", "\n");
     const lines = t.split("\n");
     for (let li = 0; li < lines.length; li++) {
-      svg += `<text x="${(p.x + 8).toFixed(1)}" y="${(p.y - 6 + li * 11).toFixed(1)}" fill="#fff" font-size="9" stroke="#000" stroke-width="2.5" paint-order="stroke">${lines[li]}</text>`;
+      svg += `<text x="${(p.x + 8 * scale).toFixed(1)}" y="${(p.y - 6 + li * 11 * scale).toFixed(1)}" fill="#fff" font-size="${9 * scale}" stroke="#000" stroke-width="${2.5 * scale}" paint-order="stroke">${lines[li]}</text>`;
     }
   }
 
   if (lp.x >= -50 && lp.x <= width + 50 && lp.y >= -50 && lp.y <= height + 50) {
-    svg += `<circle cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" r="24" fill="none" stroke="#fff" stroke-width="2" opacity="0.4" />`;
-    svg += `<circle cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" r="12" fill="rgba(255,0,0,0.85)" stroke="#fff" stroke-width="2.5" />`;
+    svg += `<circle cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" r="${14 * scale}" fill="none" stroke="#fff" stroke-width="${2 * scale}" opacity="0.4" />`;
+    svg += `<circle cx="${lp.x.toFixed(1)}" cy="${lp.y.toFixed(1)}" r="${7 * scale}" fill="${cat.color}" stroke="#fff" stroke-width="${2.5 * scale}" />`;
 
     const infoLines = [
       name,
-      `${latest.intensity}  ${latest.windSpeed}m/s  ${latest.pressure}hPa`,
-      `${latest.lng}°E  ${latest.lat}°N`,
+      `${cat.name}(${latest.intensity})  ${latest.windSpeed}m/s  ${latest.pressure}hPa`,
+      `${latest.lng.toFixed(1)}°E  ${latest.lat.toFixed(1)}°N`,
       latest.direction && latest.moveSpeed ? `移动 ${latest.direction}  ${latest.moveSpeed}km/h` : "",
       latest.time || "",
     ].filter(Boolean);
 
-    const boxX = lp.x + 26, boxY = lp.y - 22;
-    const boxH = infoLines.length * 14 + 8;
-    svg += `<rect x="${boxX.toFixed(1)}" y="${(boxY - 8).toFixed(1)}" width="155" height="${boxH}" fill="rgba(0,0,0,0.75)" rx="4" />`;
+    const boxX = 10 * scale, boxY = height - infoLines.length * 14 * scale - 18 * scale;
+    const boxH = infoLines.length * 14 * scale + 8 * scale;
+    const boxW = 200 * scale;
+    svg += `<rect x="${boxX.toFixed(1)}" y="${(boxY - 6 * scale).toFixed(1)}" width="${boxW}" height="${boxH}" fill="rgba(0,0,0,0.75)" rx="${4 * scale}" />`;
     for (let li = 0; li < infoLines.length; li++) {
-      svg += `<text x="${(boxX + 6).toFixed(1)}" y="${(boxY + li * 14).toFixed(1)}" fill="${li === 0 ? "#ff4444" : "#ccc"}" font-size="${li === 0 ? 13 : 10}" font-weight="${li === 0 ? "bold" : "normal"}" stroke="#000" stroke-width="2" paint-order="stroke">${infoLines[li]}</text>`;
+      svg += `<text x="${(boxX + 6 * scale).toFixed(1)}" y="${(boxY + li * 14 * scale).toFixed(1)}" fill="${li === 0 ? "#ff4444" : "#ccc"}" font-size="${(li === 0 ? 13 : 10) * scale}" font-weight="${li === 0 ? "bold" : "normal"}" stroke="#000" stroke-width="${2 * scale}" paint-order="stroke">${infoLines[li]}</text>`;
     }
   }
 
-  const lx = width - 175, ly = 10;
-  svg += `<g transform="translate(${lx},${ly})">`;
-  svg += `<rect x="0" y="0" width="165" height="125" fill="rgba(0,0,0,0.7)" rx="4" />`;
-  svg += `<text x="82" y="16" fill="#fff" font-size="11" font-weight="bold" text-anchor="middle">图例</text>`;
-  const legendItems = [
-    { type: "circle", r: 5, fill: "#ff0000", stroke: "#fff", label: "当前位置" },
-    { type: "circle", r: 3, fill: "#ffcc00", stroke: "#fff", label: "历史路径点" },
-    { type: "line", stroke: "#ff6600", sw: 2.5, label: "历史路径" },
-    { type: "line", stroke: "#ffcc00", sw: 2.5, dash: "8,5", label: "预测路径" },
-    { type: "ellipse", stroke: "rgba(255,200,0,0.7)", fill: "rgba(255,200,0,0.1)", label: "7/10/12级风圈" },
+  // 台风等级图例
+  const catItems = [
+    { speed: 51, label: "超强台风 ≥51m/s", color: "#C0392B" },
+    { speed: 41.5, label: "强台风 41.5-50.9", color: "#E74C3C" },
+    { speed: 32.7, label: "台风 32.7-41.4", color: "#FF8C00" },
+    { speed: 24.5, label: "强热带风暴 24.5-32.6", color: "#F4D03F" },
+    { speed: 17.2, label: "热带风暴 17.2-24.4", color: "#5DADE2" },
+    { speed: 0, label: "热带低压 10.8-17.1", color: "#6EC9E0" },
   ];
+
+  const catLx = width - 195 * scale, catLy = 10 * scale;
+  const catW = 185 * scale;
+  const catH = catItems.length * 22 * scale + 22 * scale;
+  svg += `<g transform="translate(${catLx},${catLy})">`;
+  svg += `<rect x="0" y="0" width="${catW}" height="${catH}" fill="rgba(0,0,0,0.7)" rx="${4 * scale}" />`;
+  svg += `<text x="${catW / 2}" y="${14 * scale}" fill="#fff" font-size="${11 * scale}" font-weight="bold" text-anchor="middle">台风等级</text>`;
+  for (let i = 0; i < catItems.length; i++) {
+    const iy = 22 * scale + i * 22 * scale;
+    svg += `<circle cx="${14 * scale}" cy="${iy}" r="${6 * scale}" fill="${catItems[i].color}" stroke="#fff" stroke-width="${1 * scale}" />`;
+    svg += `<text x="${26 * scale}" y="${iy + 4 * scale}" fill="#ccc" font-size="${10 * scale}">${catItems[i].label}</text>`;
+  }
+  svg += `</g>`;
+
+  // 图例
+  const lx = 10 * scale, ly = 10 * scale;
+  const lw = 140 * scale;
+  const legendItems: Array<{ type: string; r?: number; fill?: string; stroke?: string; sw?: number; dash?: string; label: string }> = [
+    { type: "circle", r: 4 * scale, fill: cat.color, stroke: "#fff", label: "当前位置" },
+    { type: "circle", r: 2 * scale, fill: "#ffcc00", stroke: "#fff", label: "历史路径点" },
+    { type: "line", stroke: "#ff6600", sw: 2.5 * scale, label: "历史路径" },
+    { type: "line", stroke: "#ffcc00", sw: 2.5 * scale, dash: `${8 * scale},${5 * scale}`, label: "预测路径" },
+  ];
+  if (circles && circles.lv7 > 0) legendItems.push({ type: "ellipse", stroke: "rgba(255,200,0,0.7)", fill: "rgba(255,200,0,0.1)", label: `7级风圈 ${circles.lv7}km` });
+  if (circles && circles.lv10 > 0) legendItems.push({ type: "ellipse", stroke: "rgba(255,120,0,0.7)", fill: "rgba(255,120,0,0.1)", label: `10级风圈 ${circles.lv10}km` });
+  if (circles && circles.lv12 > 0) legendItems.push({ type: "ellipse", stroke: "rgba(255,40,0,0.7)", fill: "rgba(255,40,0,0.1)", label: `12级风圈 ${circles.lv12}km` });
+  const lh = 22 * scale;
+  const legendH = legendItems.length * lh + 18 * scale;
+  svg += `<g transform="translate(${lx},${ly})">`;
+  svg += `<rect x="0" y="0" width="${lw}" height="${legendH}" fill="rgba(0,0,0,0.7)" rx="${4 * scale}" />`;
+  svg += `<text x="${lw / 2}" y="${14 * scale}" fill="#fff" font-size="${11 * scale}" font-weight="bold" text-anchor="middle">图例</text>`;
   for (let i = 0; i < legendItems.length; i++) {
     const item = legendItems[i];
-    const iy = 26 + i * 18;
+    const iy = 22 * scale + i * lh;
     if (item.type === "circle") {
-      svg += `<circle cx="12" cy="${iy}" r="${item.r}" fill="${item.fill}" stroke="${item.stroke}" stroke-width="1" />`;
+      svg += `<circle cx="${12 * scale}" cy="${iy}" r="${item.r}" fill="${item.fill}" stroke="${item.stroke}" stroke-width="${1 * scale}" />`;
     } else if (item.type === "line") {
-      svg += `<line x1="2" y1="${iy}" x2="22" y2="${iy}" stroke="${item.stroke}" stroke-width="${item.sw}" ${item.dash ? `stroke-dasharray="${item.dash}"` : ""} />`;
+      svg += `<line x1="${2 * scale}" y1="${iy}" x2="${22 * scale}" y2="${iy}" stroke="${item.stroke}" stroke-width="${item.sw}" ${item.dash ? `stroke-dasharray="${item.dash}"` : ""} />`;
     } else if (item.type === "ellipse") {
-      svg += `<ellipse cx="12" cy="${iy}" rx="10" ry="5" stroke="${item.stroke}" fill="${item.fill}" stroke-width="1.5" />`;
+      svg += `<ellipse cx="${12 * scale}" cy="${iy}" rx="${10 * scale}" ry="${5 * scale}" stroke="${item.stroke}" fill="${item.fill}" stroke-width="${1.5 * scale}" />`;
     }
-    svg += `<text x="28" y="${iy + 4}" fill="#ccc" font-size="10">${item.label}</text>`;
+    svg += `<text x="${28 * scale}" y="${iy + 4 * scale}" fill="#ccc" font-size="${10 * scale}">${item.label}</text>`;
   }
   svg += `</g>`;
 
@@ -467,8 +519,8 @@ export async function renderWindOverlay(
   windData: WindDataComponent[],
   options: RenderOptions
 ): Promise<RenderResult> {
-  const { width = 800, height = 600, zoom = 4, centerLng = 104, centerLat = 35.91 } = options;
-  const svg = buildWindSVG(windData, { width, height, zoom, centerLng, centerLat });
+  const { width = 1600, height = 1200, zoom = 4, centerLng = 104, centerLat = 35.91, windSeed, windStep, windArrow } = options;
+  const svg = buildWindSVG(windData, { width, height, zoom, centerLng, centerLat, windSeed, windStep, windArrow });
   const result = await sharp(baseResult.buffer)
     .composite([{ input: Buffer.from(svg), left: 0, top: 0 }])
     .png()
@@ -483,7 +535,7 @@ export async function renderTyphoonOverlay(
   name: string,
   options: RenderOptions
 ): Promise<RenderResult> {
-  const { width = 800, height = 600, zoom = 4, centerLng = 104, centerLat = 35.91 } = options;
+  const { width = 1600, height = 1200, zoom = 4, centerLng = 104, centerLat = 35.91 } = options;
   const svg = buildTyphoonSVG(track, forecast, name, { width, height, zoom, centerLng, centerLat });
   const result = await sharp(baseResult.buffer)
     .composite([{ input: Buffer.from(svg), left: 0, top: 0 }])
@@ -493,8 +545,8 @@ export async function renderTyphoonOverlay(
 }
 
 export async function renderChinaWind(options: RenderOptions = {}): Promise<RenderResult> {
-  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 800, options.height ?? 600);
-  const opts = { zoom, centerLng, centerLat, width: 800, height: 600, ...options };
+  const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 1600, options.height ?? 1200);
+  const opts = { zoom, centerLng, centerLat, width: 1600, height: 1200, ...options };
   console.log("Rendering wind map...");
   const baseResult = await renderBaseMap(opts);
   const darkBuf = await sharp(baseResult.buffer)
@@ -512,8 +564,8 @@ export async function renderChinaTyphoon(options: RenderOptions = {}): Promise<R
   console.log("Rendering typhoon map...");
   const typhoonList = await getTyphoonList();
   if (typhoonList.length === 0) {
-    const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 800, options.height ?? 600);
-    return renderBaseMap({ zoom, centerLng, centerLat, width: 800, height: 600, ...options });
+    const { zoom, centerLng, centerLat } = calcZoomFromBounds(CHINA_BOUNDS, options.width ?? 1600, options.height ?? 1200);
+    return renderBaseMap({ zoom, centerLng, centerLat, width: 1600, height: 1200, ...options });
   }
   const latestTyphoon = typhoonList[0];
   const tf = await getTyphoonNew(latestTyphoon.code);
@@ -535,7 +587,7 @@ export async function renderChinaTyphoon(options: RenderOptions = {}): Promise<R
     }
   }
 
-  const opts = { zoom: 5, centerLng: latest.lng, centerLat: latest.lat, width: 800, height: 600, ...options };
+  const opts = { zoom: 5, centerLng: latest.lng, centerLat: latest.lat, width: 1600, height: 1200, ...options };
   console.log(`  Typhoon: ${latestTyphoon.title} ${latest.intensity} ${latest.lng}E ${latest.lat}N`);
   const base = await renderBaseMap(opts);
   return renderTyphoonOverlay(base, track, forecast, latestTyphoon.title, opts);
@@ -582,8 +634,8 @@ export async function renderTyphoonOverview(options: RenderOptions = {}): Promis
   const padLat = Math.max((north - south) * 0.25, 2);
   const bounds = { west: west - padLon, east: east + padLon, south: south - padLat, north: north + padLat };
 
-  const canvasW = options.width ?? 800;
-  const canvasH = options.height ?? 600;
+  const canvasW = options.width ?? 1600;
+  const canvasH = options.height ?? 1200;
   const { zoom, centerLng, centerLat } = calcZoomFromBounds(bounds, canvasW, canvasH);
 
   const opts = { zoom, centerLng, centerLat, width: canvasW, height: canvasH, ...options };
@@ -591,6 +643,21 @@ export async function renderTyphoonOverview(options: RenderOptions = {}): Promis
 
   const base = await renderBaseMap(opts);
   return renderTyphoonOverlay(base, track, forecast, latestTyphoon.title, opts);
+}
+
+export async function renderGlobalWind(options: RenderOptions = {}): Promise<RenderResult> {
+  const opts = { zoom: 3, centerLng: 0, centerLat: 0, width: 1600, height: 800, ...options };
+  console.log("Rendering global wind map...");
+  const baseResult = await renderBaseMap(opts);
+  const darkBuf = await sharp(baseResult.buffer)
+    .negate({ alpha: false })
+    .modulate({ saturation: 0.3, brightness: 0.6 })
+    .png()
+    .toBuffer();
+  const darkResult: RenderResult = { buffer: darkBuf, dataUrl: "data:image/png;base64," + darkBuf.toString("base64"), width: baseResult.width, height: baseResult.height };
+  const windList = await getWindList();
+  const windData = await getWindData(windList[0].url);
+  return renderWindOverlay(darkResult, windData, opts);
 }
 
 export async function saveToFile(result: RenderResult, filepath: string): Promise<string> {

@@ -40,13 +40,17 @@ await saveToFile(typhoon, "output/typhoon.png");
 
 ```typescript
 interface RenderOptions {
-  width?: number;       // 画布宽度，默认 800
-  height?: number;      // 画布高度，默认 600
+  width?: number;       // 画布宽度，默认 1600（全局风图 1024）
+  height?: number;      // 画布高度，默认 1200（全局风图 512）
   format?: "png" | "jpeg";  // 输出格式
   zoom?: number;        // 缩放级别，默认由边界自动计算
   centerLng?: number;   // 中心经度
   centerLat?: number;   // 中心纬度
   mapStyle?: number;    // 地图样式，8=标准
+  tileUrl?: string;     // 自定义瓦片 URL，{z}/{x}/{y} 占位符，默认高德地图
+  windSeed?: number;    // 风场流线种子间距，默认 18（px，800px基准）
+  windStep?: number;    // 风场流线追踪步长，默认 2（px，800px基准）
+  windArrow?: number;   // 风场箭头间距，默认 50（px，800px基准）
 }
 ```
 
@@ -288,7 +292,7 @@ function getChinaBounds(): { west: number; south: number; east: number; north: n
 function renderBaseMap(options?: RenderOptions): Promise<RenderResult>
 ```
 
-**默认参数：** `zoom=5, centerLng=104, centerLat=35, width=800, height=600, mapStyle=8`
+**默认参数：** `zoom=5, centerLng=104, centerLat=35, width=1600, height=1200, mapStyle=8`
 
 **示例：**
 
@@ -368,7 +372,7 @@ function renderWindOverlay(
 ): Promise<RenderResult>
 ```
 
-流线使用双线性插值+数值积分追踪风场路径，颜色按最大风速着色。
+流线使用双线性插值+数值积分追踪风场路径，颜色按最大风速着色。可通过 `windSeed`/`windStep` 控制精细度。
 
 ---
 
@@ -390,6 +394,27 @@ function renderChinaWind(options?: RenderOptions): Promise<RenderResult>
 
 ---
 
+### renderGlobalWind(options?)
+
+一键渲染全球风场图（暗色底图+风场流线）。
+
+```typescript
+function renderGlobalWind(options?: RenderOptions): Promise<RenderResult>
+```
+
+**默认参数：** `zoom=2, centerLng=0, centerLat=0, width=1024, height=512`
+
+画布宽度 1024px 精确匹配 zoom=2 时的世界宽度（`256 × 2² = 1024`），无重复。风场数据经度自动回绕，跨越 0°/360° 边界无断裂。
+
+**示例：**
+
+```typescript
+const g = await renderGlobalWind();
+const gFine = await renderGlobalWind({ windSeed: 10, windStep: 1, width: 2048, height: 1024, zoom: 3 });
+```
+
+---
+
 ### renderTyphoonOverlay(baseResult, track, forecast, name, options)
 
 将台风路径叠加到底图上。
@@ -405,12 +430,13 @@ function renderTyphoonOverlay(
 ```
 
 **渲染内容：**
-- 历史路径（橙色折线+黄色圆点）
+- 历史路径（橙色折线+按台风等级着色的圆点）
 - 预测路径（黄色虚线+空心圆+强度标签）
-- 7/10/12级风圈（椭圆+标签）
-- 当前位置标记（红色圆点+脉冲圈）
-- 信息面板（名称、强度、坐标、气压、移动方向/速度、时间）
-- 图例（右下角）
+- 7/10/12级风圈（椭圆，无文字标注）
+- 当前位置标记（等级颜色圆点+脉冲圈）
+- 信息面板（左下角：名称、等级、风速、气压、坐标、移动方向/速度、时间）
+- 台风等级图例（右上角：6级分类+颜色+风速范围）
+- 图例（左上角：含风圈半径详情）
 
 ---
 
@@ -465,7 +491,7 @@ function toDataUrl(result: RenderResult): string
 ```typescript
 import {
   renderBaseMap, renderChinaRadar, renderChinaCloud,
-  renderChinaWind, renderChinaTyphoon, renderTyphoonOverview,
+  renderChinaWind, renderGlobalWind, renderChinaTyphoon, renderTyphoonOverview,
   saveToFile
 } from "./weather-lib";
 
@@ -481,15 +507,19 @@ await saveToFile(radar, "output/radar.png");
 const cloud = await renderChinaCloud();
 await saveToFile(cloud, "output/cloud.png");
 
-// 4. 风场
+// 4. 风场（默认精细度）
 const wind = await renderChinaWind();
 await saveToFile(wind, "output/wind.png");
 
-// 5. 台风聚焦
+// 5. 全球风场
+const globalWind = await renderGlobalWind();
+await saveToFile(globalWind, "output/global_wind.png");
+
+// 6. 台风聚焦
 const typhoon = await renderChinaTyphoon();
 await saveToFile(typhoon, "output/typhoon.png");
 
-// 6. 台风全览
+// 7. 台风全览
 const overview = await renderTyphoonOverview();
 await saveToFile(overview, "output/typhoon_overview.png");
 ```
