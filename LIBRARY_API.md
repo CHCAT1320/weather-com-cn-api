@@ -282,6 +282,213 @@ function getChinaBounds(): { west: number; south: number; east: number; north: n
 
 ---
 
+## 我的天气 — 数据层 API
+
+### getWeatherIndex(cityCode)
+
+获取实时天气 + 生活指数 + 预警 + 7天预报（核心聚合接口）。
+
+```typescript
+function getWeatherIndex(cityCode: string): Promise<WeatherIndexResponse>
+```
+
+**参数：** `cityCode` — 9位城市代码，如 `"101010100"`（北京）。
+
+**返回：**
+
+```typescript
+interface WeatherIndexResponse {
+  dataSK: WeatherSK;           // 实时天气
+  dataZS: WeatherZS;           // 30+ 生活指数
+  alarmDZ: { w: WeatherAlarm[] };  // 天气预警
+  cityDZ: WeatherCityDZ;       // 城市天气摘要
+  fc: { f: WeatherFC[] };      // 7天预报
+}
+```
+
+**WeatherSK 字段：**
+
+| 字段 | 说明 | 示例 |
+|------|------|------|
+| `temp` | 当前温度（℃） | `"26.1"` |
+| `weather` | 天气现象 | `"雨"` |
+| `WD` / `wde` | 风向（中文/英文） | `"东北风"` / `"NE"` |
+| `WS` | 风力等级 | `"2级"` |
+| `SD` | 相对湿度 | `"88%"` |
+| `qy` | 气压（hPa） | `"998"` |
+| `aqi` | AQI | `"37"` |
+| `rain` | 当前降水（mm） | `"0"` |
+| `rain24h` | 24h降水（mm） | `"0"` |
+| `time` | 观测时间 | `"12:55"` |
+| `date` | 日期 | `"07月10日(星期五)"` |
+
+**WeatherZS** — 30+ 生活指数，每个指数含 `name`、`hint`、`des` 三个字段：
+`ct`（穿衣）、`uv`（紫外线）、`xc`（洗车）、`gm`（感冒）、`yd`（运动）、`ys`（雨伞）、`tr`（旅游）、`co`（舒适度）、`ag`（过敏）、`zs`（中暑）、`ls`（晾晒）、`cl`（晨练）、`jt`（交通）、`dy`（钓鱼）、`gj`（逛街）、`pk`（放风筝）、`hc`（划船）、`nl`（夜生活）、`yh`（约会）、`xq`（心情）、`pl`（污染扩散）、`pj`（啤酒）、`wc`（风寒）、`ac`（空调）、`gl`（太阳镜）、`fs`（防晒）、`mf`（美发）、`pp`（化妆）、`gz`（干燥）、`lk`（路况）
+
+**WeatherFC** — 7天预报每天一条：
+
+| 字段 | 说明 |
+|------|------|
+| `fa` / `fb` | 白天/夜间天气代码 |
+| `fc` / `fd` | 最高/最低温度（℃） |
+| `fe` / `ff` | 白天/夜间风向 |
+| `fg` / `fh` | 白天/夜间风力 |
+| `fm` | 相对湿度（%） |
+| `fn` | 降水概率（%） |
+| `fi` | 日期（M/D） |
+| `fj` | 星期 |
+
+---
+
+### getHourlyWeather(cityCode)
+
+获取逐3小时天气预报。
+
+```typescript
+function getHourlyWeather(cityCode: string): Promise<Record<string, HourWeatherItem[]>>
+```
+
+**返回：** 按天分组的逐小时数据，key 如 `"1d"`、`"23d"`、`"7d"`。
+
+```typescript
+interface HourWeatherItem {
+  time: string;        // 如 "10日11时"
+  weatherCode: string; // 天气代码
+  weather: string;     // 天气现象
+  temp: string;        // 温度
+  windDir: string;     // 风向
+  windScale: string;   // 风力
+}
+```
+
+---
+
+### getCalendar40(cityCode, year, month)
+
+获取40天日历预报（单月）。
+
+```typescript
+function getCalendar40(cityCode: string, year: string, month: string): Promise<WeatherFC40[]>
+```
+
+**参数：** `year` 如 `"2026"`，`month` 如 `"07"`（补零）。
+
+**返回：** 约 42 条数据（含前后月部分日期），`cla` 字段区分 `"history"`（历史均值）和 `"forecast"`（预报）。
+
+---
+
+### getIpLocation()
+
+通过 IP 获取当前城市代码。
+
+```typescript
+function getIpLocation(): Promise<string>
+```
+
+**返回：** 9位城市代码，如 `"101010100"`。
+
+---
+
+### searchCity(name)
+
+按名称搜索城市。
+
+```typescript
+function searchCity(name: string): Promise<CitySearchItem[]>
+```
+
+**参数：** `name` — 支持中文/拼音/英文，如 `"上海"`、`"shanghai"`。
+
+**返回：** `ref` 字段格式 `"城市代码~拼音~中文名~..."`，取第一段为城市代码。
+
+> 注意：不支持带行政后缀（如"上海市"、"华龙区"），只支持城市名本身。
+
+---
+
+## 我的天气 — 渲染层 API
+
+### renderWeatherCard(sk, zs, alarms, fc, options?)
+
+渲染天气卡片（当前天气 + 生活指数 + 预警 + 降水）。
+
+```typescript
+function renderWeatherCard(
+  sk: WeatherSK,
+  zs: WeatherZS,
+  alarms: WeatherAlarm[],
+  fc: WeatherFC[],
+  options?: WeatherRenderOptions
+): Promise<RenderResult>
+```
+
+**渲染内容：**
+- 城市名 + 日期时间
+- 当前温度（80px 大字）+ 天气图标
+- 风向、湿度、降水、气压
+- AQI 空气质量徽章
+- 天气预警（如有）
+- 6项生活指数（穿衣/紫外线/洗车/感冒/运动/雨伞，3列2行）
+
+**默认画布：** 580×380px
+
+---
+
+### renderForecastChart(fc, options?)
+
+渲染7天预报图表。
+
+```typescript
+function renderForecastChart(fc: WeatherFC[], options?: WeatherRenderOptions): Promise<RenderResult>
+```
+
+**渲染内容：** 温度柱状图（高低温）+ 天气图标 + 日期标签。
+
+**默认画布：** 700×360px
+
+---
+
+### renderHourlyTimeline(hourly, fc, options?)
+
+渲染逐小时预报时间线。
+
+```typescript
+function renderHourlyTimeline(
+  hourly: Record<string, HourWeatherItem[]>,
+  fc: WeatherFC[],
+  options?: WeatherRenderOptions
+): Promise<RenderResult>
+```
+
+**渲染内容：** 温度曲线 + 面积填充 + 数据点 + 天气图标 + 时间标签。
+
+**默认画布：** 700×320px
+
+---
+
+### renderWeatherDashboard(cityCode, options?)
+
+一键渲染天气仪表盘（卡片 + 逐小时 + 7天预报）。
+
+```typescript
+function renderWeatherDashboard(cityCode: string, options?: WeatherRenderOptions): Promise<RenderResult>
+```
+
+自动拉取数据，渲染三面板垂直拼接。**默认画布：** 700×~1000px。
+
+### WeatherRenderOptions
+
+```typescript
+interface WeatherRenderOptions {
+  width?: number;    // 画布宽度
+  bg?: string;       // 背景色，默认 "#1a1a2e"
+  fg?: string;       // 文字色，默认 "#e0e0e0"
+  accent?: string;   // 强调色，默认 "#ff6b35"
+  secondary?: string;// 次要文字色，默认 "#8888aa"
+}
+```
+
+---
+
 ## 渲染层 API
 
 ### renderBaseMap(options?)
@@ -488,6 +695,8 @@ function toDataUrl(result: RenderResult): string
 
 ## 完整示例
 
+### 地图渲染
+
 ```typescript
 import {
   renderBaseMap, renderChinaRadar, renderChinaCloud,
@@ -522,6 +731,40 @@ await saveToFile(typhoon, "output/typhoon.png");
 // 7. 台风全览
 const overview = await renderTyphoonOverview();
 await saveToFile(overview, "output/typhoon_overview.png");
+```
+
+### 我的天气
+
+```typescript
+import {
+  getWeatherIndex, getHourlyWeather, getCalendar40,
+  getIpLocation, searchCity,
+  renderWeatherCard, renderForecastChart, renderHourlyTimeline, renderWeatherDashboard,
+  saveToFile
+} from "./weather-lib";
+
+// 获取城市代码
+const code = await getIpLocation();                  // IP 自动定位
+// const results = await searchCity("上海");         // 按名称搜索
+// const code = results[0].ref.split("~")[0];
+
+// 获取数据
+const [wx, hourly] = await Promise.all([
+  getWeatherIndex(code),
+  getHourlyWeather(code),
+]);
+
+// 单独渲染各组件
+await saveToFile(await renderWeatherCard(wx.dataSK, wx.dataZS, wx.alarmDZ.w, wx.fc.f), "output/card.png");
+await saveToFile(await renderForecastChart(wx.fc.f), "output/forecast.png");
+await saveToFile(await renderHourlyTimeline(hourly, wx.fc.f), "output/timeline.png");
+
+// 一键仪表盘（自动拉数据+渲染三面板）
+await saveToFile(await renderWeatherDashboard(code), "output/dashboard.png");
+
+// 40天预报
+const fc40 = await getCalendar40(code, "2026", "07");
+console.log(fc40.filter(f => f.cla === "forecast"));
 ```
 
 ---

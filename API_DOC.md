@@ -584,3 +584,508 @@ renderBaseMap({ tileUrl: "https://tile.openstreetmap.org/{z}/{x}/{y}.png" })
 // CartoDB 暗色主题
 renderBaseMap({ tileUrl: "https://a.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}.png" })
 ```
+
+---
+
+## 9. 我的天气（My Weather）栏目 API
+
+> 以下 API 为中国天气网首页"我的天气"栏目所使用，涵盖实时天气、生活指数、预警、逐小时预报、7天/15天/40天预报等。
+
+### 通用说明
+
+- 所有 `d1.weather.com.cn` 域名的接口均需 `Referer: https://www.weather.com.cn/` 请求头
+- 返回格式为 JSONP（JavaScript 赋值 `var xxx = {...}`），需去除前缀后解析 JSON
+- 城市代码（cityCode）为 9 位数字，如 `101010100`（北京）
+- 国际城市代码可能有不同格式
+
+### 9.1 实时天气 + 生活指数 + 预警 + 7天预报（核心聚合接口）
+
+```
+GET https://d1.weather.com.cn/weather_index/{cityCode}.html
+```
+
+**请求头：** `Referer: https://www.weather.com.cn/`
+
+**示例：** `https://d1.weather.com.cn/weather_index/101010100.html`
+
+**返回格式：** JSONP（JavaScript 赋值，包含多个变量）
+
+**原始响应：**
+```
+var cityDZ = {...};
+var alarmDZ = {...};
+var dataSK = {...};
+var dataZS = {...};
+var fc = {...};
+```
+
+#### 9.1.1 `dataSK` — 实时天气
+
+```json
+{
+  "nameen": "beijing",
+  "cityname": "北京",
+  "city": "101010100",
+  "temp": "26.1",
+  "tempf": "79",
+  "WD": "东北风",
+  "wde": "NE",
+  "WS": "2级",
+  "wse": "8km/h",
+  "SD": "88%",
+  "sd": "88%",
+  "qy": "998",
+  "njd": "4km",
+  "time": "12:55",
+  "rain": "0",
+  "rain24h": "0",
+  "aqi": "37",
+  "aqi_pm25": "37",
+  "weather": "雨",
+  "weathere": null,
+  "weathercode": "d301",
+  "limitnumber": "5和0",
+  "date": "07月10日(星期五)"
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `nameen` | String | 城市英文名（拼音） |
+| `cityname` | String | 城市中文名 |
+| `city` | String | 城市代码 |
+| `temp` | String | 当前温度（℃） |
+| `tempf` | String | 当前温度（℉） |
+| `WD` | String | 风向（中文） |
+| `wde` | String | 风向（英文缩写，如 NE） |
+| `WS` | String | 风力等级 |
+| `wse` | String | 风速（km/h） |
+| `SD` / `sd` | String | 相对湿度（%） |
+| `qy` | String | 气压（hPa） |
+| `njd` | String | 能见度（km） |
+| `time` | String | 观测时间（HH:mm） |
+| `rain` | String | 当前降水量（mm） |
+| `rain24h` | String | 24小时降水量（mm） |
+| `aqi` | String | AQI 空气质量指数 |
+| `aqi_pm25` | String | PM2.5 |
+| `weather` | String | 天气现象（中文） |
+| `weathercode` | String | 天气代码（d=白天, n=夜间, 如 d301） |
+| `limitnumber` | String | 限行尾号 |
+| `date` | String | 日期 |
+
+#### 9.1.2 `cityDZ` — 城市天气摘要
+
+```json
+{
+  "weatherinfo": {
+    "city": "北京",
+    "cityname": "beijing",
+    "temp": "28",
+    "tempn": "24",
+    "weather": "大雨转暴雨",
+    "wd": "东风转东南风",
+    "ws": "<3级",
+    "weathercode": "d9",
+    "weathercoden": "n10",
+    "fctime": "202607100800"
+  }
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `temp` | 白天最高温度 |
+| `tempn` | 夜间最低温度 |
+| `weather` | 天气现象 |
+| `weathercode` | 白天天气代码 |
+| `weathercoden` | 夜间天气代码 |
+| `fctime` | 预报发布时间 |
+
+#### 9.1.3 `alarmDZ` — 天气预警
+
+```json
+{
+  "w": [
+    {
+      "w1": "北京市",
+      "w4": "02",
+      "w5": "暴雨",
+      "w6": "03",
+      "w7": "橙色",
+      "w8": "2026-07-09 13:35",
+      "w9": "市气象台2026年07月09日13时30分发布暴雨橙色预警信号...",
+      "w10": "202607091335545112暴雨橙色",
+      "w11": "10101-20260709133539-0203.html",
+      "w12": "2026-07-09 13:40",
+      "w13": "北京市发布暴雨橙色预警信号",
+      "w14": "Alert",
+      "w15": "2026-07-11 01:35:39",
+      "w16": "11000041600000_20260709133539"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `w1` | 区域名称 |
+| `w4` | 预警类型代码（02=暴雨, 09=雷电, 等） |
+| `w5` | 预警类型名称 |
+| `w6` | 预警级别代码（01=蓝, 02=黄, 03=橙, 04=红） |
+| `w7` | 预警级别名称 |
+| `w8` | 发布时间 |
+| `w9` | 预警详情描述 |
+| `w10` | 预警唯一标识 |
+| `w11` | 预警详情页路径 |
+| `w12` | 更新时间 |
+| `w13` | 预警标题 |
+| `w15` | 预警过期时间 |
+| `w16` | 区域+预警组合标识 |
+
+#### 9.1.4 `dataZS` — 生活指数（30+ 项）
+
+```json
+{
+  "zs": {
+    "date": "2026071011",
+    "uv_name": "紫外线强度指数",
+    "uv_hint": "最弱",
+    "uv_des_s": "辐射弱，涂擦SPF8-12防晒护肤品。",
+    "ct_name": "穿衣指数",
+    "ct_hint": "热",
+    "ct_des_s": "适合穿T恤、短薄外套等夏季服装。",
+    "xc_name": "洗车指数",
+    "xc_hint": "不宜",
+    "xc_des_s": "有雨，雨水和泥水会弄脏爱车。",
+    "gm_name": "感冒指数",
+    "gm_hint": "较易发",
+    "gm_des_s": "天凉，湿度大，较易感冒。",
+    "yd_name": "运动指数",
+    "yd_hint": "较不宜",
+    "yd_des_s": "有降水，推荐您在室内进行休闲运动。",
+    "ys_name": "雨伞指数",
+    "ys_hint": "带伞",
+    "ys_des_s": "较强降水，带雨伞，避免淋湿。",
+    "tr_name": "旅游指数",
+    "tr_hint": "较不宜",
+    "tr_des_s": "有强降雨，建议您最好还是在室内活动。",
+    "co_name": "舒适度指数",
+    "co_hint": "较舒适",
+    "co_des_s": "晴好的天气，午后略闷热，早晚凉爽。",
+    "ag_name": "过敏指数",
+    "ag_hint": "不易发",
+    "ag_des_s": "除特殊体质，无需担心过敏问题。",
+    "zs_name": "中暑指数",
+    "zs_hint": "无中暑风险",
+    "zs_des_s": "天气不热，在炎炎夏日中十分难得。",
+    "ls_name": "晾晒指数",
+    "ls_hint": "不宜",
+    "ls_des_s": "有较强降水会淋湿衣物，不适宜晾晒。",
+    "cl_name": "晨练指数",
+    "cl_hint": "不宜",
+    "cl_des_s": "有较强降水，建议在室内做适当锻炼。",
+    "jt_name": "交通指数",
+    "jt_hint": "较差",
+    "jt_des_s": "有强降水且路面湿滑，注意控制车速。",
+    "dy_name": "钓鱼指数",
+    "dy_hint": "不宜",
+    "dy_des_s": "天气不好，不适合垂钓。",
+    "gj_name": "逛街指数",
+    "gj_hint": "不适宜",
+    "gj_des_s": "有较强降水，坚持出门需带雨具。",
+    "pk_name": "放风筝指数",
+    "pk_hint": "不宜",
+    "pk_des_s": "天气不好，不适宜放风筝。",
+    "hc_name": "划船指数",
+    "hc_hint": "不适宜",
+    "hc_des_s": "天气不好，建议选择别的娱乐方式。",
+    "nl_name": "夜生活指数",
+    "nl_hint": "较不适宜",
+    "nl_des_s": "建议夜生活最好在室内进行。",
+    "yh_name": "约会指数",
+    "yh_hint": "不适宜",
+    "yh_des_s": "建议在室内约会，免去天气的骚扰。",
+    "xq_name": "心情指数",
+    "xq_hint": "差",
+    "xq_des_s": "有较强降水，使人心情不佳，注意调节。",
+    "pl_name": "空气污染扩散条件指数",
+    "pl_hint": "优",
+    "pl_des_s": "气象条件非常有利于空气污染物扩散。",
+    "pj_name": "啤酒指数",
+    "pj_hint": "适宜",
+    "pj_des_s": "天气炎热，可适量饮用啤酒，不要过量。",
+    "wc_name": "风寒指数",
+    "wc_hint": "无",
+    "wc_des_s": "温度未达到风寒所需的低温。",
+    "ac_name": "空调开启指数",
+    "ac_hint": "较少开启",
+    "ac_des_s": "体感舒适，不需要开启空调。",
+    "gl_name": "太阳镜指数",
+    "gl_hint": "不需要",
+    "gl_des_s": "白天能见度差不需要佩戴太阳镜",
+    "fs_name": "防晒指数",
+    "fs_hint": "弱",
+    "fs_des_s": "涂抹8-12SPF防晒护肤品。",
+    "mf_name": "美发指数",
+    "mf_hint": "一般",
+    "mf_des_s": "天热，头皮皮脂分泌多，注意清洁。",
+    "pp_name": "化妆指数",
+    "pp_hint": "去油",
+    "pp_des_s": "请选用露质面霜打底，水质无油粉底霜。",
+    "gz_name": "干燥指数",
+    "gz_hint": "适宜",
+    "gz_des_s": "温湿条件适宜，风速不大。",
+    "lk_name": "路况指数",
+    "lk_hint": "湿滑",
+    "lk_des_s": "路面湿滑，车辆易打滑，减慢车速。"
+  },
+  "cn": "北京"
+}
+```
+
+> 共 30+ 项生活指数。每个指数包含 `_name`（名称）、`_hint`（等级提示）、`_des_s`（详细描述）三个字段。
+
+#### 9.1.5 `fc` — 7天预报
+
+```json
+{
+  "f": [
+    {
+      "fa": "09", "fb": "10",
+      "fc": "28", "fd": "24",
+      "fe": "东风", "ff": "东南风",
+      "fg": "<3级", "fh": "<3级",
+      "fk": "2", "fl": "3",
+      "fm": "100", "fn": "73.5",
+      "fi": "7/10", "fj": "今天"
+    }
+  ]
+}
+```
+
+| 字段 | 说明 |
+|------|------|
+| `fa` | 白天天气代码 |
+| `fb` | 夜间天气代码 |
+| `fc` | 白天最高温度（℃） |
+| `fd` | 夜间最低温度（℃） |
+| `fe` | 白天风向 |
+| `ff` | 夜间风向 |
+| `fg` | 白天风力 |
+| `fh` | 夜间风力 |
+| `fk` / `fl` | 未知 |
+| `fm` | 相对湿度（%） |
+| `fn` | 降水概率（%） |
+| `fi` | 日期（M/D） |
+| `fj` | 星期几（中文） |
+
+### 9.2 逐小时天气（3小时间隔）
+
+**数据来源：** 7天预报页面 `http://www.weather.com.cn/weather/{cityCode}.shtml`
+
+**请求头：** `Referer: https://www.weather.com.cn/`
+
+**返回格式：** 页面内嵌 JavaScript 变量 `var hour3data = {...}`
+
+```json
+{
+  "1d": [
+    "10日11时,d09,大雨,25℃,东风,<3级,3",
+    "10日14时,d08,中雨,27℃,东南风,<3级,3",
+    "10日17时,d07,小雨,28℃,东风,<3级,3",
+    "10日20时,n08,中雨,26℃,东风,<3级,0",
+    "10日23时,n09,大雨,25℃,东风,<3级,0",
+    "11日02时,n10,暴雨,25℃,东南风,<3级,0",
+    "11日05时,n09,大雨,24℃,东南风,<3级,0",
+    "11日08时,d02,阴,24℃,南风,<3级,3"
+  ],
+  "23d": [["11日08时,d02,阴,24℃,南风,<3级,3", ...]]
+}
+```
+
+**每条数据格式：** CSV 字符串 `时间,天气代码,天气现象,温度,风向,风力,??`
+
+| 段 | 说明 |
+|------|------|
+| 1 | 时间（M月D日HH时） |
+| 2 | 天气代码（d=白天, n=夜间） |
+| 3 | 天气现象（中文） |
+| 4 | 温度（℃） |
+| 5 | 风向 |
+| 6 | 风力 |
+| 7 | 未知 |
+
+### 9.3 15天预报
+
+```
+GET http://www.weather.com.cn/weather15d/{cityCode}.shtml
+```
+
+**请求头：** `Referer: https://www.weather.com.cn/`
+
+**返回格式：** HTML 页面，数据为服务端渲染（内嵌在 HTML 中），非 JSON API
+
+**数据位于 HTML 结构中：**
+
+```html
+<ul class="t clearfix">
+  <li>
+    <span class="time">周五（17日）</span>
+    <big class="png30 d02"></big>
+    <big class="png30 n301"></big>
+    <span class="wea">阴转雨</span>
+    <span class="tem"><em>31℃</em>/23℃</span>
+    <span class="wind">东南风转西南风</span>
+    <span class="wind1"><3级</span>
+  </li>
+</ul>
+```
+
+> 需解析 HTML 提取数据。CSS 类 `png30 dXX` 对应白天天气图标，`png30 nXX` 对应夜间。
+
+### 9.4 40天日历预报
+
+```
+GET https://d1.weather.com.cn/calendar_new/{year}/{cityCode}_{year}{month}.html
+```
+
+**请求头：** `Referer: https://www.weather.com.cn/`
+
+**URL 参数：**
+
+| 参数 | 类型 | 说明 | 示例 |
+|------|------|------|------|
+| `{year}` | String | 年份，4位数字 | `2026` |
+| `{cityCode}` | String | 城市代码 | `101010100` |
+| `{month}` | String | 月份，2位数字（补零） | `07` |
+
+**示例：** `https://d1.weather.com.cn/calendar_new/2026/101010100_202607.html`
+
+**返回格式：** JSONP（JavaScript 赋值 `var fc40 = [...]`）
+
+```json
+[
+  {
+    "alins": "开市.入宅.出行.修造.词讼",
+    "als": "祭祀,沐浴,理发,整手足甲,修饰垣墙,平治道涂,馀事勿取",
+    "cla": "history",
+    "date": "20260628",
+    "des": "历史均值",
+    "hgl": "50%",
+    "hmax": "32",
+    "hmin": "22",
+    "nl": "十四",
+    "nlyf": "五月",
+    "r": "f",
+    "time": "11:30",
+    "update": "yes",
+    "wk": "日",
+    "jq": "",
+    "w1": "",
+    "wd1": "",
+    "ws1": "",
+    "t1": "", "t2": "", "t3": "",
+    "max": "", "min": "",
+    "maxobs": "", "minobs": "",
+    "rainobs": ""
+  }
+]
+```
+
+| 字段 | 说明 |
+|------|------|
+| `date` | 日期（YYYYMMDD） |
+| `cla` | 数据类别：`history`=历史均值, `forecast`=预报 |
+| `des` | 描述（历史均值/预报） |
+| `hmax` | 历史最高温度（℃） |
+| `hmin` | 历史最低温度（℃） |
+| `hgl` | 历史降水概率（%） |
+| `max` | 预报最高温度（℃），仅 `cla=forecast` 时有值 |
+| `min` | 预报最低温度（℃），仅 `cla=forecast` 时有值 |
+| `w1` | 白天天气现象 |
+| `wd1` | 风向 |
+| `ws1` | 风力 |
+| `t1` | 天气图标（白天） |
+| `t2` | 天气图标（夜间） |
+| `nl` | 农历日 |
+| `nlyf` | 农历月 |
+| `wk` | 星期 |
+| `jq` | 节气 |
+| `alins` | 忌 |
+| `als` | 宜 |
+| `r` | 是否为休息日（f=否） |
+| `time` | 更新时间 |
+| `update` | 是否已更新 |
+
+> 每月约 42 天的数据（含前后月部分日期），一次返回一个月的日历数据。需按月逐月请求获取完整 40 天数据。
+
+### 9.5 定制化天气（Dingzhi）
+
+```
+GET https://d1.weather.com.cn/dingzhi/{cityCode}.html
+```
+
+**请求头：** `Referer: https://www.weather.com.cn/`
+
+**返回格式：** JSONP
+
+```javascript
+var cityDZ101010100 = {"weatherinfo":{"city":"101010100","cityname":"北京","fctime":"202607101100","temp":"28℃","tempn":"24℃","weather":"大雨转暴雨","weathercode":"d9","weathercoden":"n10","wd":"东风转东南风","ws":"<3级"}};
+var alarmDZ101010100 = {"w":[...]};
+```
+
+> 与 `weather_index` 接口中的 `cityDZ` 和 `alarmDZ` 数据相同，但变量名带城市代码后缀。
+
+### 9.6 城市搜索
+
+```
+GET https://toy1.weather.com.cn/search?cityname={cityName}
+```
+
+**返回格式：** JSONP
+
+**返回结构：** 城市列表，每条包含 `ref` 字段（格式：`cityCode~省份~城市名~...`）
+
+### 9.7 IP 定位
+
+```
+GET https://wgeo.weather.com.cn/ip/
+```
+
+**返回格式：** JavaScript，设置全局变量 `id`（城市代码）
+
+### 9.8 用户定制天空列表
+
+```
+GET https://mysky.weather.com.cn/myPhoto/customization/selectCustomizations/?userId={userId}
+```
+
+**返回格式：** JSONP（回调 `getallddd`）
+
+**响应：** `{"message":"success","data":[...]}`
+
+> 需要用户登录后的 userId。
+
+### 9.9 天气代码对照
+
+| 代码 | 天气 | 代码 | 天气 |
+|------|------|------|------|
+| `d00` / `n00` | 晴 | `d01` / `n01` | 多云 |
+| `d02` / `n02` | 阴 | `d03` / `n03` | 阵雨 |
+| `d04` / `n04` | 雷阵雨 | `d05` / `n05` | 雷阵雨伴冰雹 |
+| `d06` / `n06` | 雨夹雪 | `d07` / `n07` | 小雨 |
+| `d08` / `n08` | 中雨 | `d09` / `n09` | 大雨 |
+| `d10` / `n10` | 暴雨 | `d11` / `n11` | 大暴雨 |
+| `d12` / `n12` | 特大暴雨 | `d13` / `n13` | 阵雪 |
+| `d14` / `n14` | 小雪 | `d15` / `n15` | 中雪 |
+| `d16` / `n16` | 大雪 | `d17` / `n17` | 暴雪 |
+| `d18` / `n18` | 雾 | `d19` / `n19` | 冻雨 |
+| `d20` / `n20` | 沙尘暴 | `d21` / `n21` | 小到中雨 |
+| `d22` / `n22` | 中到大雨 | `d23` / `n23` | 大到暴雨 |
+| `d24` / `n24` | 暴雨到大暴雨 | `d25` / `n25` | 大暴雨到特大暴雨 |
+| `d26` / `n26` | 小到中雪 | `d27` / `n27` | 中到大雪 |
+| `d28` / `n28` | 大到暴雪 | `d29` / `n29` | 浮尘 |
+| `d30` / `n30` | 扬沙 | `d31` / `n31` | 强沙尘暴 |
+| `d301` / `n301` | 雨 | `d302` / `n302` | 雪 |
+
+> 前缀 `d` = 白天 (day), `n` = 夜间 (night)。代码对应天气图标，如 `d02.png` 为白天阴天图标。
