@@ -336,7 +336,7 @@ function buildHourlyTimelineSimple(items: HourWeatherItem[], opts: Required<Weat
 // ==================== 渲染函数 ====================
 
 function svgToPng(svg: string): Promise<Buffer> {
-  return sharp(Buffer.from(svg)).png().toBuffer();
+  return sharp(Buffer.from(svg), { density: 288 }).png().toBuffer();
 }
 
 export async function renderWeatherCard(
@@ -421,10 +421,15 @@ export async function renderWeatherDashboard(
     svgToPng(hourlySVG),
   ]);
 
+  const totalW = 700;
+  const cardResized = await sharp(cardBuf).resize({ width: totalW }).png().toBuffer();
+  const fcResized = await sharp(fcBuf).resize({ width: totalW }).png().toBuffer();
+  const hourlyResized = await sharp(hourlyBuf).resize({ width: totalW }).png().toBuffer();
+
   const [cardMeta, fcMeta, hourlyMeta] = await Promise.all([
-    sharp(cardBuf).metadata(),
-    sharp(fcBuf).metadata(),
-    sharp(hourlyBuf).metadata(),
+    sharp(cardResized).metadata(),
+    sharp(fcResized).metadata(),
+    sharp(hourlyResized).metadata(),
   ]);
 
   const cardH = cardMeta.height || 0;
@@ -432,15 +437,14 @@ export async function renderWeatherDashboard(
   const hourlyH = hourlyMeta.height || 0;
   const gap = 24;
 
-  const totalW = 700;
   const totalH = cardH + gap + hourlyH + gap + fcH;
 
   const buffer = await sharp({
     create: { width: totalW, height: totalH, channels: 4, background: { r: 26, g: 26, b: 46, alpha: 1 } }
   }).composite([
-    { input: cardBuf, left: Math.round((totalW - (cardMeta.width || 0)) / 2), top: 0 },
-    { input: hourlyBuf, left: 0, top: cardH + gap },
-    { input: fcBuf, left: 0, top: cardH + gap + hourlyH + gap },
+    { input: cardResized, left: 0, top: 0 },
+    { input: hourlyResized, left: 0, top: cardH + gap },
+    { input: fcResized, left: 0, top: cardH + gap + hourlyH + gap },
   ]).png().toBuffer();
 
   return { buffer, dataUrl: "data:image/png;base64," + buffer.toString("base64"), width: totalW, height: totalH };

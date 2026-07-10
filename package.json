@@ -1,9 +1,42 @@
 ﻿{
   "name": "weather-com-cn-api",
-  "version": "3.0.0",
+  "version": "1.0.1",
+  "description": "中国天气网 API 封装与气象可视化库，支持台风、雷达、云图、风场、天气卡片等",
   "main": "weather-lib.ts",
+  "types": "weather-lib.ts",
   "type": "module",
+  "exports": {
+    ".": "./weather-lib.ts"
+  },
+  "files": [
+    "weather-lib.ts",
+    "weather-lib-types.ts",
+    "weather-lib-data.ts",
+    "weather-lib-render.ts",
+    "weather-lib-render-weather.ts",
+    "README.md",
+    "API_DOC.md",
+    "LIBRARY_API.md"
+  ],
   "scripts": {},
+  "keywords": [
+    "weather",
+    "china",
+    "typhoon",
+    "radar",
+    "satellite",
+    "wind",
+    "forecast",
+    "天气",
+    "台风",
+    "气象"
+  ],
+  "author": "CHCAT1320",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CHCAT1320/weather-com-cn-api.git"
+  },
   "dependencies": {
     "sharp": "^0.34.5"
   },
