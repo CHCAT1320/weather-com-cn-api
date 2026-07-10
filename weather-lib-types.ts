@@ -11,20 +11,6 @@ export interface TrackPoint {
   windCircles: { lv7: number; lv10: number; lv12: number } | null;
 }
 
-export interface WindCircles {
-  level7:  { ne: number; se: number; sw: number; nw: number; max: number };
-  level10: { ne: number; se: number; sw: number; nw: number; max: number };
-  level12: { ne: number; se: number; sw: number; nw: number; max: number };
-}
-
-export type TrackPointNew = [
-  null, string, string, string, string, string,
-  string, string, string, string,
-  Array<[string, string, string, string, string, null?]>,
-  Record<string, Array<[string, string, string, string, string, string, string, string]>>,
-  [string, string, string, string]
-];
-
 export interface CloudTime { time: Array<{ m: string[]; picPath: string[] }>; }
 export interface RadarTime { datas: Array<{ fn: string; dt: string }>; }
 export interface WindTimeItem { t1: number; t2: number; url: string; }

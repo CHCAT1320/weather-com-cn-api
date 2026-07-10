@@ -24,29 +24,25 @@ const typhoon = await renderChinaTyphoon();
 await saveToFile(typhoon, "output/typhoon.png");
 ```
 
-## 渲染类型
+## 渲染函数
 
-| 函数 | 说明 |
-|------|------|
-| `renderBaseMap()` | 纯底图 |
-| `renderChinaRadar()` | 底图 + 全国雷达 |
-| `renderChinaCloud()` | 底图 + 卫星云图 |
-| `renderChinaWind()` | 暗色底图 + 风场流线 |
-| `renderChinaTyphoon()` | 台风聚焦图 |
-| `renderTyphoonOverview()` | 台风全览图 |
-
-## 运行测试
-
-```bash
-bun run test-weather-lib.ts
-```
+| 函数 | 说明 | 默认画布 |
+|------|------|---------|
+| `renderBaseMap()` | 纯底图 | 1600×1200 |
+| `renderChinaRadar()` | 底图 + 全国雷达 | 1600×1200 |
+| `renderChinaCloud()` | 底图 + 卫星云图 | 1600×1200 |
+| `renderChinaWind()` | 暗色底图 + 风场流线 | 1600×1200 |
+| `renderGlobalWind()` | 全球风场流线 | 1024×512 |
+| `renderChinaTyphoon()` | 台风聚焦图 | 1600×1200 |
+| `renderTyphoonOverview()` | 台风全览图 | 1600×1200 |
 
 ## 文档
 
+- [库 API 文档](LIBRARY_API.md)
 - [数据源 API 文档](API_DOC.md)
-- [库 API 调用文档](LIBRARY_API.md)
 
 ## 数据源
 
 - 台风 / 雷达 / 云图 / 风场：中国天气网 (weather.com.cn)
-- 底图瓦片：高德地图 (Amap)
+- 底图瓦片：高德地图（可通过 `tileUrl` 自定义）
+- 风场模型：GFS 全球预报（1°×1° 网格）

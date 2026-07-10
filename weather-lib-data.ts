@@ -2,12 +2,11 @@
 // weather-lib-data.ts — 数据 API
 // 封装所有 weather.com.cn 数据接口
 // ============================================================
-import type { TyphoonItem, CloudTime, RadarTime, WindTimeItem, WindDataComponent, TrackPointNew } from "./weather-lib-types";
+import type { TyphoonItem, CloudTime, RadarTime, WindTimeItem, WindDataComponent } from "./weather-lib-types";
 
 const D1 = "https://d1.weather.com.cn";
 const TY = "https://typhoon.weather.com.cn";
 const TY_H = { "Referer": "https://typhoon.weather.com.cn/" };
-const WX_H = { "Referer": "https://www.weather.com.cn/", "User-Agent": "Mozilla/5.0" };
 
 function parseJsonp(text: string, isAssign = false): any {
   if (isAssign) {
@@ -33,12 +32,6 @@ export async function getTyphoonList(): Promise<TyphoonItem[]> {
   return list;
 }
 
-export async function getTyphoonDetailXML(code: string): Promise<string> {
-  const resp = await fetch(TY + "/data/typhoonFlash/" + code + ".xml");
-  return resp.text();
-}
-
-/** 获取指定台风的新版 JSON 详情（含路径点、风圈、预报数据） */
 export async function getTyphoonNew(code: string, year = "2026"): Promise<{ update: string; typhoon: any[] }> {
   const resp = await fetch(D1 + "/typhoon/typhoon_data/" + year + "/" + code + ".json", { headers: TY_H });
   const text = await resp.text();
@@ -96,12 +89,6 @@ export async function fetchRadarImage(filename: string): Promise<Buffer> {
   return Buffer.from(await resp.arrayBuffer());
 }
 
-/** 获取所有雷达站点的图像边界信息 */
-export async function getImageBounds(): Promise<Record<string, { bound: [[number, number], [number, number]]; name: string; prov: string }>> {
-  const resp = await fetch("https://img.weather.com.cn/radarinfo/img_bounds.json", { headers: TY_H });
-  return parseJsonp(await resp.text());
-}
-
 /** 获取中国区域的地理边界（73°E~135°E, 12.2°N~54.2°N） */
 export function getChinaBounds(): { west: number; south: number; east: number; north: number } {
   return { west: 73, south: 12.2, east: 135, north: 54.2 };
@@ -143,27 +130,4 @@ export async function getWindData(filename: string): Promise<WindDataComponent[]
 /** 构建风场数据完整 URL */
 export function getWindDataUrl(filename: string): string {
   return D1 + "/typhoon/wind/" + filename;
-}
-
-/** 获取降水圈数据 */
-export async function getRainCircle(): Promise<{ rainCircle: any[] }> {
-  const resp = await fetch(D1 + "/typhoon/typhoon_data/rainCircle.json", { headers: TY_H });
-  return parseJsonp(await resp.text());
-}
-
-/** 获取旧版全国雷达拼图列表 */
-export async function getRadarMosaicList(): Promise<any> {
-  const resp = await fetch("https://mpfv4.weather.com.cn/mpf_resource/mpf_v4/mpfv4_list.json", { headers: WX_H });
-  return parseJsonp(await resp.text(), true);
-}
-
-/** 构建旧版雷达拼图完整 URL */
-export function getRadarMosaicUrl(path: string): string {
-  return "https://mpfv4.weather.com.cn/mpf_resource/mpf_v4/" + path;
-}
-
-/** 下载旧版全国雷达拼图 PNG 文件 */
-export async function fetchRadarMosaic(path: string): Promise<Buffer> {
-  const resp = await fetch(getRadarMosaicUrl(path), { headers: WX_H });
-  return Buffer.from(await resp.arrayBuffer());
 }
